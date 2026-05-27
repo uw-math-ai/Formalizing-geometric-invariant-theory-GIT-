@@ -1,44 +1,13 @@
 import Mathlib.RepresentationTheory.Maschke
-import Mathlib.RingTheory.MvPolynomial.Symmetric.FundamentalTheorem
-import Mathlib.LinearAlgebra.Matrix.GeneralLinearGroup.Defs
 import Mathlib.RepresentationTheory.Rep
-import Mathlib.RepresentationTheory.Irreducible
 import Mathlib.RepresentationTheory.Invariants
 import Mathlib.RepresentationTheory.Semisimple
-import Mathlib.Algebra.Ring.Action.Basic
-import Mathlib.LinearAlgebra.FiniteDimensional.Basic
 
 universe u
 
 variable {k : Type u} [Field k] (G : Type u) [Group G]
 
-/- A group `G` is linear-algebraic over a field `k` if it is isomorphic to
-a subgroup of `GL_n(k)` for some `n` -/
-def IsLinearAlgebraic := ∃ (n : Type*), ∃ _ : DecidableEq n, ∃ _ : Fintype n,
-    ∃ H : Subgroup (GL n k), Nonempty (H ≃* G)
-
 open Monoid MonoidAlgebra Representation
-
---the direct product of two representations
-noncomputable
-example (V W : Rep k G) : Rep k G := (V ⨯ W)
-
---morphisms in the representation category are coerced to functions
--- use this representation
-example (V W : Rep k G) (f : V ⟶ W) (v : V) : W := f v
-
-noncomputable
-example (V W : Rep k G) : V ⨯ W ⟶ V := CategoryTheory.Limits.prod.fst
-
---expressing a representation is finite-dimensional
-example (M : Rep k G) : Prop := FiniteDimensional k M
-
---expressing a representation is an indexed product of representations
-noncomputable
-example {α : Type} (ι : α → Rep k G) : Rep k G := ∏ᶜ ι
-
---expressing a represesntation is irreductible
-example (M : Rep k G) : Prop := IsIrreducible M.ρ
 
 section LocallyFinite
 
@@ -189,10 +158,6 @@ theorem IsLinearlyReductive.reynolds_unique
   haveI : FiniteDimensional k M_W := inferInstanceAs (FiniteDimensional k (LinearMap.ker π₁))
   have hss_W : IsSemisimpleRepresentation M_W.ρ := hlr.isSemisimple M_W
   -- Step 4: Form L = {w ∈ ker π₁ | π₂ w = 0} as a subrepresentation of M_W.ρ
-  have hker₂_stable : ∀ g, LinearMap.ker π₂ ≤ (LinearMap.ker π₂).comap (M.ρ g) := by
-    intro g v hv
-    simp only [Submodule.mem_comap, LinearMap.mem_ker] at hv ⊢
-    rw [h₂_eq, hv]
   let L : Subrepresentation M_W.ρ := {
     toSubmodule := (LinearMap.ker π₂).comap (LinearMap.ker π₁).subtype
     apply_mem_toSubmodule := by
