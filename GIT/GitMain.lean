@@ -7,10 +7,38 @@ import Mathlib.RingTheory.Finiteness.Basic
 import Mathlib.RingTheory.Ideal.Maps
 import GIT.ReynoldsOperator
 
+/-!
+# Hilbert finiteness for geometric invariant theory
+
+Let a linearly reductive group `G` act on a finitely generated `ℕ`-graded `k`-algebra `R` by
+grading-preserving `k`-algebra automorphisms, with the action locally finite. This file proves
+that the invariant subalgebra `R^G` is again finitely generated as a `k`-algebra.
+
+## Main result
+
+* `GIT_finiteType_invariants`: `R^G` is of finite type over `k`.
+
+## Strategy
+
+The proof assembles four ingredients, one per section below.
+
+* **A. Inherited grading.** `R^G` inherits the grading of `R`, i.e.
+  `R^G = ⨁ d, (𝒜 d ∩ R^G)` (`fixedSubalgebra_decomposes`).
+* **B. Finite generation from the irrelevant ideal.** A graded algebra whose irrelevant ideal is
+  finitely generated is of finite type over its degree-`0` piece, hence over `k`
+  (`finiteType_k_of_finitely_generated_irrelevant_ideal`, `fixedSubalgebra_finiteType`).
+* **C. Reynolds ideal machinery.** Using a Reynolds projection `ρ : R → R^G`, the irrelevant ideal
+  of `R^G` is finitely generated as an ideal of `R^G` (`RGplusA_fg_of_reynolds`).
+* **D. Assembly.** Combining the above with the multiplicative Reynolds projection from
+  `GIT.ReynoldsOperator` yields the main theorem.
+-/
+
 open scoped DirectSum
 open scoped BigOperators
 
 universe u v w uR
+
+/-! ## A. Inherited grading on the invariant subalgebra -/
 
 section InheritedGrading
 
@@ -260,6 +288,8 @@ theorem fixedSubalgebra_decomposes
 
 end InheritedGrading
 
+/-! ## B. Finite generation of a graded algebra from its irrelevant ideal -/
+
 section GradedAlgebraFiniteType
 
 /-
@@ -501,6 +531,8 @@ end FixedSubalgebraFiniteType
 
 end GradedAlgebraFiniteType
 
+/-! ## C. Reynolds ideal machinery -/
+
 section ReynoldsIdealMachinery
 
 section ExtendedIdealNoether
@@ -623,13 +655,9 @@ end RGplusA_FiniteGeneration
 
 section ReynoldsRewriting
 
-set_option linter.unusedSectionVars false
-
 variable (k : Type u) [Field k]
-variable (G : Type v) [Group G]
 variable (A : Type*) [CommRing A] [Algebra k A]
 variable (R : Type*) [CommRing R] [Algebra k R]
-variable [Algebra A R] [IsScalarTower k A R]
 variable (toR : A →ₐ[k] R)
 variable (ρ : R →ₗ[k] A)
 variable (s : Finset R)
@@ -759,7 +787,7 @@ end ReynoldsRewriting
 end ReynoldsIdealMachinery
 
 /-!
-## Main GIT theorem (Hilbert finiteness)
+## D. The main GIT finiteness theorem
 
 For a linearly reductive group `G` acting on a finitely generated `k`-algebra `R`,
 the invariant subring `R^G` is finitely generated as a `k`-algebra.
