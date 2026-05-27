@@ -349,11 +349,9 @@ theorem exists_reynolds_of_locallyFinite
     intro W₁ W₂ hW₁_fin hW₂_fin hW₁_st hW₂_st π₁ π₂ h₁ h₁_eq h₂ h₂_eq r hr₁ hr₂
     -- Use W₁ ⊔ W₂ as common submodule, apply reynolds_natural to inclusions
     let W := W₁ ⊔ W₂
-    have hW_stable : ∀ g, W ≤ W.comap (ρ g) := by
-      intro g v hv
-      rcases Submodule.mem_sup.mp hv with ⟨v₁, hv₁, v₂, hv₂, rfl⟩
-      exact Submodule.mem_sup.mpr ⟨ρ g v₁, hW₁_st g hv₁, ρ g v₂, hW₂_st g hv₂,
-        (map_add (ρ g) v₁ v₂).symm⟩
+    have hW_stable : ∀ g, W ≤ W.comap (ρ g) := fun g =>
+      sup_le ((hW₁_st g).trans (Submodule.comap_mono le_sup_left))
+             ((hW₂_st g).trans (Submodule.comap_mono le_sup_right))
     -- `Module.Finite` implies `FiniteDimensional` for the coercion
     haveI hfd₁ : FiniteDimensional k ↥W₁ := hW₁_fin
     haveI hfd₂ : FiniteDimensional k ↥W₂ := hW₂_fin
@@ -421,11 +419,9 @@ theorem exists_reynolds_of_locallyFinite
     intro r s
     -- Use V r ⊔ V s as common submodule
     let W := V r ⊔ V s
-    have hW_st : ∀ g, W ≤ W.comap (ρ g) := by
-      intro g v hv
-      rcases Submodule.mem_sup.mp hv with ⟨v₁, hv₁, v₂, hv₂, rfl⟩
-      exact Submodule.mem_sup.mpr ⟨ρ g v₁, (hV_comap r) g hv₁, ρ g v₂, (hV_comap s) g hv₂,
-        (map_add (ρ g) v₁ v₂).symm⟩
+    have hW_st : ∀ g, W ≤ W.comap (ρ g) := fun g =>
+      sup_le ((hV_comap r g).trans (Submodule.comap_mono le_sup_left))
+             ((hV_comap s g).trans (Submodule.comap_mono le_sup_right))
     haveI : FiniteDimensional k ↥(V r) := hV_fin r
     haveI : FiniteDimensional k ↥(V s) := hV_fin s
     haveI : FiniteDimensional k ↥W := Submodule.finiteDimensional_sup (V r) (V s)
@@ -538,22 +534,15 @@ theorem IsLinearlyReductive.reynolds_unique_locallyFinite
     rintro x ⟨v, _, rfl⟩; exact h₁.map_mem v
   have hp₂V_inv : Submodule.map p₂ V ≤ σ.invariants := by
     rintro x ⟨v, _, rfl⟩; exact h₂.map_mem v
-  -- W is G-stable.
-  have hW_stable : ∀ g, W ≤ W.comap (σ g) := by
-    intro g w hw
-    rcases Submodule.mem_sup.mp hw with ⟨a, ha, c, hc, rfl⟩
-    rcases Submodule.mem_sup.mp ha with ⟨a₁, ha₁, a₂, ha₂, rfl⟩
-    have h_a₁ : σ g a₁ ∈ V := hV_stable g ⟨a₁, ha₁⟩
-    have h_a₂ : σ g a₂ ∈ Submodule.map p₁ V := by
-      rw [(σ.mem_invariants a₂).mp (hp₁V_inv ha₂) g]; exact ha₂
-    have h_c : σ g c ∈ Submodule.map p₂ V := by
-      rw [(σ.mem_invariants c).mp (hp₂V_inv hc) g]; exact hc
-    change σ g (a₁ + a₂ + c) ∈ W
-    rw [map_add, map_add]
-    refine Submodule.add_mem _ (Submodule.add_mem _ ?_ ?_) ?_
-    · exact Submodule.mem_sup_left (Submodule.mem_sup_left h_a₁)
-    · exact Submodule.mem_sup_left (Submodule.mem_sup_right h_a₂)
-    · exact Submodule.mem_sup_right h_c
+  -- `W` is `G`-stable: `V` is stable, and the summands `Submodule.map pᵢ V ⊆ σ.invariants` are
+  -- fixed pointwise by every `σ g`.
+  have inv_st : ∀ (S : Submodule k R), S ≤ σ.invariants → ∀ g, S ≤ S.comap (σ g) :=
+    fun S hS g x hx => by rw [Submodule.mem_comap, (σ.mem_invariants x).mp (hS hx) g]; exact hx
+  have hW_stable : ∀ g, W ≤ W.comap (σ g) := fun g =>
+    sup_le
+      (sup_le ((hV_comap g).trans (Submodule.comap_mono (le_sup_of_le_left le_sup_left)))
+        ((inv_st _ hp₁V_inv g).trans (Submodule.comap_mono (le_sup_of_le_left le_sup_right))))
+      ((inv_st _ hp₂V_inv g).trans (Submodule.comap_mono le_sup_right))
   -- Finite-dimensionality of W.
   haveI : Module.Finite k V := hV_fin
   have map_finite : ∀ (p : R →ₗ[k] R), Module.Finite k ↥(Submodule.map p V) := by
