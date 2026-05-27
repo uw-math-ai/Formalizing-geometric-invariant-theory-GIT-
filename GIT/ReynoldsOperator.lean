@@ -3,26 +3,85 @@ import Mathlib.RepresentationTheory.Rep
 import Mathlib.RepresentationTheory.Invariants
 import Mathlib.RepresentationTheory.Semisimple
 
+/-!
+# The Reynolds operator for linearly reductive groups
+
+This file constructs the *Reynolds operator* — a canonical `G`-equivariant projection onto the
+invariants — for a linearly reductive group `G`, first for finite-dimensional representations and
+then, via local finiteness, for arbitrary `k`-modules and `k`-algebras.
+
+## Main definitions
+
+* `Representation.IsLocallyFinite`: an action is locally finite if every element lies in a
+  finite-dimensional `G`-stable submodule.
+* `IsLinearlyReductive`: every finite-dimensional representation of `G` is semisimple.
+* `Representation.invariantSubrepresentation`: the invariants packaged as a `Subrepresentation`.
+
+## Main results
+
+* `IsLinearlyReductive.exists_reynolds_projection`: existence of the Reynolds projection on a
+  finite-dimensional representation.
+* `IsLinearlyReductive.reynolds_natural`: the projection is natural in the representation.
+* `IsLinearlyReductive.reynolds_unique`: it is unique (a corollary of naturality).
+* `exists_reynolds_of_locallyFinite`, `IsLinearlyReductive.reynolds_unique_locallyFinite`:
+  existence and uniqueness for locally finite actions.
+* `exists_reynolds_mul_compat_of_locallyFinite`: on a `k`-algebra the Reynolds projection is
+  `R^G`-linear.
+
+## Sections
+
+* A. Locally finite actions
+* B. Linear reductivity
+* C. Reynolds projection: finite-dimensional case
+* D. Reynolds projection: locally finite case
+* E. Reynolds projection on algebras
+-/
+
 universe u
 
 variable {k : Type u} [Field k] (G : Type u) [Group G]
 
 open Monoid MonoidAlgebra Representation
 
+/-- Build a morphism of representations from a `G`-equivariant linear map, packaging the
+boilerplate `{ hom := ModuleCat.ofHom f, comm := … }`. -/
+def Rep.mkHom {k : Type u} [Field k] {G : Type u} [Group G] {M N : Rep k G} (f : M →ₗ[k] N)
+    (hf : ∀ (g : G) (v : M), f (M.ρ g v) = N.ρ g (f v)) : M ⟶ N where
+  hom := ModuleCat.ofHom f
+  comm g := ModuleCat.hom_ext <| LinearMap.ext fun v => hf g v
+
+@[simp] lemma Rep.mkHom_hom {k : Type u} [Field k] {G : Type u} [Group G] {M N : Rep k G}
+    (f : M →ₗ[k] N) (hf : ∀ (g : G) (v : M), f (M.ρ g v) = N.ρ g (f v)) :
+    (Rep.mkHom f hf).hom.hom = f := rfl
+
+/-- A representation endomorphism whose underlying map projects onto the invariants is constant
+on `G`-orbits: `P (ρ g v) = P v`. Indeed `P (ρ g v) = ρ g (P v)` by equivariance, and `ρ g` fixes
+`P v ∈ invariants`. -/
+lemma Rep.isProj_invariants_apply_rho {k : Type u} [Field k] {G : Type u} [Group G] {M : Rep k G}
+    {P : M ⟶ M} (h : LinearMap.IsProj M.ρ.invariants P.hom.hom) (g : G) (v : M) :
+    P.hom.hom (M.ρ g v) = P.hom.hom v := by
+  rw [Rep.hom_comm_apply P g v]
+  exact ((M.ρ.mem_invariants _).mp (h.map_mem v)) g
+
+/-! ## A. Locally finite actions -/
+
 section LocallyFinite
 
 variable {k : Type*} [CommSemiring k] {G : Type*} [Monoid G]
     {R : Type*} [AddCommMonoid R] [Module k R] [DistribMulAction G R]
 
-/-- Def1: A `DistribMulAction` of `G` on a `k`-module `R` is locally finite if every element
-of `R` is contained in a finite-dimensional `G`-stable `k`-submodule. -/
+/-- A `DistribMulAction` of `G` on a `k`-module `R` is *locally finite* if every element `r : R`
+is contained in a finite-dimensional `G`-stable `k`-submodule `V ≤ R`. -/
 def Representation.IsLocallyFinite (k : Type*) [CommSemiring k] (G : Type*) [Monoid G]
     (R : Type*) [AddCommMonoid R] [Module k R] [DistribMulAction G R] : Prop :=
   ∀ r : R, ∃ V : Submodule k R, Module.Finite k V ∧
     (∀ (g : G) (v : V), (g • (v : R)) ∈ V) ∧ r ∈ V
 
-/-- Every action of a finite monoid is locally finite: the orbit of any element
-spans a finitely generated submodule. -/
+/-- Every action of a finite monoid is locally finite.
+
+For `r : R`, the submodule `V = span_k (G • r)` works: it is finite-dimensional since the orbit
+`G • r` is finite, it contains `r = 1 • r`, and it is `G`-stable because
+`g • (g' • r) = (g * g') • r` again lies in the orbit. -/
 theorem Representation.isLocallyFinite_of_finite (k : Type*) [CommSemiring k] (G : Type*)
     [Monoid G] [Finite G] (R : Type*) [AddCommMonoid R] [Module k R]
     [DistribMulAction G R] [SMulCommClass G k R] :
@@ -43,14 +102,18 @@ theorem Representation.isLocallyFinite_of_finite (k : Type*) [CommSemiring k] (G
 
 end LocallyFinite
 
-section GeneralReynolds
+/-! ## B. Linear reductivity -/
 
-/-- Def3: A group `G` is linearly reductive over `k` if every finite-dimensional representation
-is completely reducible (every subrepresentation has a complement). -/
+section LinearReductivity
+
+/-- A group `G` is *linearly reductive* over `k` if every finite-dimensional representation `M` of
+`G` is semisimple, i.e. every subrepresentation of `M` admits a `G`-stable complement. -/
 class IsLinearlyReductive (k G : Type u) [Field k] [Group G] : Prop where
   isSemisimple : ∀ (M : Rep k G) [FiniteDimensional k M], IsSemisimpleRepresentation M.ρ
 
-/-- Finite groups with invertible cardinality are linearly reductive (Maschke's theorem). -/
+/-- **Maschke's theorem.** A finite group `G` whose order is invertible in `k` is linearly
+reductive. A finite-dimensional `M` is semisimple as a representation iff it is semisimple as a
+`k[G]`-module, and the latter holds because `k[G]` is semisimple when `|G|` is invertible in `k`. -/
 instance IsLinearlyReductive.of_fintype (k G : Type u) [Field k] [Group G]
     [Fintype G] [Invertible (Fintype.card G : k)] :
     IsLinearlyReductive k G where
@@ -60,7 +123,8 @@ instance IsLinearlyReductive.of_fintype (k G : Type u) [Field k] [Group G]
       exact ⟨Invertible.ne_zero (Fintype.card G : k)⟩
     exact M.ρ.isSemisimpleRepresentation_iff_isSemisimpleModule_asModule.mpr inferInstance
 
-/-- Def4: The invariants of a representation form a subrepresentation. -/
+/-- The invariants `ρ.invariants = {v | ∀ g, ρ g v = v}` of a representation `ρ`, packaged as a
+`Subrepresentation`. They are `G`-stable since `g` fixes any vector fixed by all of `G`. -/
 noncomputable def Representation.invariantSubrepresentation
     {V : Type*} [AddCommGroup V] [Module k V] (ρ : Representation k G V) :
     Subrepresentation ρ where
@@ -70,8 +134,19 @@ noncomputable def Representation.invariantSubrepresentation
     intro g'
     rw [hv g, hv g']
 
-/-- A linearly reductive group admits a `Rep`-morphism projection onto the invariants
-of any finite-dimensional representation. Equivariance is bundled into the morphism. -/
+end LinearReductivity
+
+/-! ## C. Reynolds projection: finite-dimensional case -/
+
+section FiniteDimensionalReynolds
+
+/-- **Existence of the Reynolds projection.** For a finite-dimensional representation `M` of a
+linearly reductive group, there is a representation morphism `π : M ⟶ M` whose underlying linear
+map is a projection onto `M.ρ.invariants`.
+
+By semisimplicity the invariants `Mᴳ` have a `G`-stable complement `W`, so `M = Mᴳ ⊕ W`; the
+projection along this decomposition fixes `Mᴳ` and kills `W`. It is `G`-equivariant because both
+summands are `G`-stable, hence assembles into a `Rep` morphism. -/
 theorem IsLinearlyReductive.exists_reynolds_projection
     (hlr : IsLinearlyReductive k G)
     (M : Rep k G) [FiniteDimensional k M] :
@@ -109,109 +184,19 @@ theorem IsLinearlyReductive.exists_reynolds_projection
     -- LHS: proj(ρ g vi) + proj(ρ g vw)  =  proj(vi) + 0
     -- RHS: proj(vi)     + proj(vw)       =  proj(vi) + 0
     rw [hvi_inv, hproj_vi, hproj_gvw, hproj_vw]
-  refine ⟨{ hom := ModuleCat.ofHom πlin
-            comm := fun g => by
-              ext v
-              change πlin (M.ρ g v) = M.ρ g (πlin v)
-              have hinv : πlin v ∈ M.ρ.invariants := hproj.map_mem v
-              have hfix : M.ρ g (πlin v) = πlin v :=
-                ((M.ρ.mem_invariants _).mp hinv) g
-              rw [hequiv g v, hfix] }, hproj⟩
+  exact ⟨Rep.mkHom πlin fun g v => by
+    have hfix : M.ρ g (πlin v) = πlin v := ((M.ρ.mem_invariants _).mp (hproj.map_mem v)) g
+    rw [hequiv g v, hfix], hproj⟩
 
-/-- **Uniqueness of the Reynolds projection.** Any two `Rep`-morphism projections onto
-`ρ.invariants` must agree. The proof reduces to showing that a G-equivariant map
-from a representation with no invariants to a trivial representation is zero, which follows
-from complete reducibility. -/
-theorem IsLinearlyReductive.reynolds_unique
-    (hlr : IsLinearlyReductive k G)
-    (M : Rep k G) [FiniteDimensional k M]
-    (π₁ π₂ : M ⟶ M)
-    (h₁ : LinearMap.IsProj M.ρ.invariants π₁.hom.hom)
-    (h₂ : LinearMap.IsProj M.ρ.invariants π₂.hom.hom) :
-    π₁ = π₂ := by
-  -- Equivariance of `Rep` morphisms + landing in invariants gives constancy on G-orbits.
-  have h₁_eq : ∀ (g : G) (v : M), π₁.hom.hom (M.ρ g v) = π₁.hom.hom v := fun g v => by
-    rw [Rep.hom_comm_apply π₁ g v]
-    exact ((M.ρ.mem_invariants _).mp (h₁.map_mem v)) g
-  have h₂_eq : ∀ (g : G) (v : M), π₂.hom.hom (M.ρ g v) = π₂.hom.hom v := fun g v => by
-    rw [Rep.hom_comm_apply π₂ g v]
-    exact ((M.ρ.mem_invariants _).mp (h₂.map_mem v)) g
-  -- Reduce to linear-map equality.
-  apply Action.hom_ext
-  apply ModuleCat.hom_ext
-  set π₁ : M →ₗ[k] M := π₁.hom.hom with hπ₁
-  set π₂ : M →ₗ[k] M := π₂.hom.hom with hπ₂
-  -- Strategy: decompose v = vi + vw along ker π₁.
-  -- On invariants both projections are the identity.
-  -- On ker π₁: π₂(vw) ∈ invariants, but also π₁(π₂ vw) = π₂ vw (π₁ is id on invariants)
-  -- while π₁ vw = 0, so π₂ vw ∈ invariants ∩ ker π₁ = ⊥, hence π₂ vw = 0 = π₁ vw.
-  have hc₁ := h₁.isCompl
-  -- Step 1: ker π₁ is G-stable
-  have hker₁_stable : ∀ g, LinearMap.ker π₁ ≤ (LinearMap.ker π₁).comap (M.ρ g) := by
-    intro g v hv
-    simp only [Submodule.mem_comap, LinearMap.mem_ker] at hv ⊢
-    rw [h₁_eq, hv]
-  -- Step 2: Restrict M.ρ to ker π₁
-  let M_W : Rep k G := M.subrepresentation (LinearMap.ker π₁) hker₁_stable
-  -- Step 3: ker π₁ is semisimple (subspace of f.d., linearly reductive)
-  haveI : FiniteDimensional k (LinearMap.ker π₁) := Submodule.finiteDimensional_of_le le_top
-  haveI : FiniteDimensional k M_W := inferInstanceAs (FiniteDimensional k (LinearMap.ker π₁))
-  have hss_W : IsSemisimpleRepresentation M_W.ρ := hlr.isSemisimple M_W
-  -- Step 4: Form L = {w ∈ ker π₁ | π₂ w = 0} as a subrepresentation of M_W.ρ
-  let L : Subrepresentation M_W.ρ := {
-    toSubmodule := (LinearMap.ker π₂).comap (LinearMap.ker π₁).subtype
-    apply_mem_toSubmodule := by
-      intro g v hv
-      simp only [Submodule.mem_comap, LinearMap.mem_ker] at hv ⊢
-      change π₂ (M.ρ g (v : M)) = 0
-      rw [h₂_eq]; exact hv
-  }
-  -- Step 5: Get complement T of L in ker π₁
-  obtain ⟨T, hLT⟩ := hss_W.exists_isCompl L
-  -- Step 6: Show elements of T are G-invariant (hence zero)
-  have hT_zero : T = ⊥ := by
-    rw [eq_bot_iff]
-    intro ⟨t, ht_ker⟩ ht_T
-    change (⟨t, ht_ker⟩ : LinearMap.ker π₁) = 0
-    -- Show M.ρ g t = t for all g, i.e., t ∈ M.ρ.invariants
-    suffices ht_inv : t ∈ M.ρ.invariants by
-      -- t ∈ M.ρ.invariants ∩ ker π₁ = ⊥
-      have : t ∈ M.ρ.invariants ⊓ LinearMap.ker π₁ := ⟨ht_inv, ht_ker⟩
-      rw [hc₁.disjoint.eq_bot] at this
-      exact Subtype.ext ((Submodule.mem_bot k).mp this)
-    rw [Representation.mem_invariants]
-    intro g
-    -- M.ρ g t - t ∈ L ∩ T = ⊥, hence M.ρ g t = t
-    have h_diff_L : (M_W.ρ g ⟨t, ht_ker⟩ - ⟨t, ht_ker⟩ : LinearMap.ker π₁) ∈ L.toSubmodule := by
-      simp only [L, Submodule.mem_comap, LinearMap.mem_ker]
-      change π₂ (M.ρ g t - t) = 0
-      simp only [map_sub, h₂_eq, sub_self]
-    have h_diff_T : (M_W.ρ g ⟨t, ht_ker⟩ - ⟨t, ht_ker⟩ : LinearMap.ker π₁) ∈ T.toSubmodule :=
-      T.toSubmodule.sub_mem (T.apply_mem_toSubmodule g ht_T) ht_T
-    have h_mem_bot : (M_W.ρ g ⟨t, ht_ker⟩ - ⟨t, ht_ker⟩ : LinearMap.ker π₁) ∈
-        L.toSubmodule ⊓ T.toSubmodule := ⟨h_diff_L, h_diff_T⟩
-    rw [← Subrepresentation.toSubmodule_inf, hLT.disjoint.eq_bot] at h_mem_bot
-    have h_eq : M_W.ρ g ⟨t, ht_ker⟩ = ⟨t, ht_ker⟩ := sub_eq_zero.mp h_mem_bot
-    exact congr_arg Subtype.val h_eq
-  -- Step 7: L = ⊤ in ker π₁, so ker π₁ ⊆ ker π₂
-  have hL_top : L.toSubmodule = ⊤ := by
-    have h := hLT.sup_eq_top (α := Subrepresentation M_W.ρ)
-    rw [hT_zero, sup_bot_eq] at h
-    exact congr_arg Subrepresentation.toSubmodule h
-  -- Step 8: Conclude
-  ext v
-  obtain ⟨vi, hvi, vw, hvw, rfl⟩ := Submodule.mem_sup.mp
-    (hc₁.sup_eq_top ▸ Submodule.mem_top : v ∈ M.ρ.invariants ⊔ LinearMap.ker π₁)
-  simp only [map_add, h₁.map_id vi hvi, h₂.map_id vi hvi]
-  have hvw_ker₁ : π₁ vw = 0 := LinearMap.mem_ker.mp hvw
-  have hvw_ker₂ : π₂ vw = 0 := by
-    have : (⟨vw, hvw⟩ : LinearMap.ker π₁) ∈ L.toSubmodule := by rw [hL_top]; exact Submodule.mem_top
-    simpa [L, Submodule.mem_comap, LinearMap.mem_ker] using this
-  rw [hvw_ker₁, hvw_ker₂]
+/-- **Naturality of the Reynolds projection.** Let `P₁ : M₁ ⟶ M₁` and `P₂ : M₂ ⟶ M₂` be Reynolds
+projections onto the invariants of `M₁`, `M₂`, and `I : M₁ ⟶ M₂` a morphism of representations.
+Then `I ∘ P₁ = P₂ ∘ I` pointwise.
 
-/-- **Naturality of the Reynolds projection.** If `P₁` and `P₂` are `Rep`-morphism projections
-onto the invariants of `M₁`, `M₂` respectively and `I : M₁ ⟶ M₂` is a morphism of representations,
-then `I ∘ P₁ = P₂ ∘ I` pointwise. Equivariance of `I`, `P₁`, `P₂` is bundled in the morphisms. -/
+Write `v = P₁ v + w` with `w ∈ ker P₁`. On `M₁ᴳ` both sides equal `I` (the projections fix
+invariants and `I` preserves them), so it suffices that `P₂ (I w) = 0`. Now `x ↦ P₂ (I x)` is
+constant on `G`-orbits, so its kernel is a subrepresentation of the finite-dimensional `ker P₁`
+containing every coboundary `g • x - x`; by semisimplicity it has a complement consisting of
+invariants. Since `M₁ᴳ ⊓ ker P₁ = ⊥` that complement is `⊥`, so the kernel is all of `ker P₁`. -/
 theorem IsLinearlyReductive.reynolds_natural
     (hlr : IsLinearlyReductive k G)
     (M₁ M₂ : Rep k G) [FiniteDimensional k M₁] [FiniteDimensional k M₂]
@@ -223,12 +208,8 @@ theorem IsLinearlyReductive.reynolds_natural
   -- Derive equivariance/orbit-constancy from morphism comm + landing in invariants.
   have hι : ∀ (g : G) (v : M₁), I.hom.hom (M₁.ρ g v) = M₂.ρ g (I.hom.hom v) :=
     fun g v => Rep.hom_comm_apply I g v
-  have h₁_eq : ∀ (g : G) (v : M₁), P₁.hom.hom (M₁.ρ g v) = P₁.hom.hom v := fun g v => by
-    rw [Rep.hom_comm_apply P₁ g v]
-    exact ((M₁.ρ.mem_invariants _).mp (h₁.map_mem v)) g
-  have h₂_eq : ∀ (g : G) (v : M₂), P₂.hom.hom (M₂.ρ g v) = P₂.hom.hom v := fun g v => by
-    rw [Rep.hom_comm_apply P₂ g v]
-    exact ((M₂.ρ.mem_invariants _).mp (h₂.map_mem v)) g
+  have h₁_eq := Rep.isProj_invariants_apply_rho h₁
+  have h₂_eq := Rep.isProj_invariants_apply_rho h₂
   set ι : M₁ →ₗ[k] M₂ := I.hom.hom
   set π₁ : M₁ →ₗ[k] M₁ := P₁.hom.hom
   set π₂ : M₂ →ₗ[k] M₂ := P₂.hom.hom
@@ -291,9 +272,39 @@ theorem IsLinearlyReductive.reynolds_natural
   have : (⟨w, hw_ker⟩ : LinearMap.ker π₁) ∈ L.toSubmodule := by rw [hL_top]; exact Submodule.mem_top
   simpa [L, Submodule.mem_comap, LinearMap.mem_ker, LinearMap.comp_apply] using this
 
-/-- Given a linearly reductive group `G` acting locally finitely on a `k`-module `R`,
-there exists a `Rep`-morphism projection onto the `G`-invariants on the bundled representation
-`Rep.of (Representation.ofDistribMulAction k G R)`. -/
+/-- **Uniqueness of the Reynolds projection.** Any two `Rep`-morphism projections onto
+`ρ.invariants` of a finite-dimensional representation agree. This is the special case of
+`reynolds_natural` with the identity intertwiner `𝟙 M`. -/
+theorem IsLinearlyReductive.reynolds_unique
+    (hlr : IsLinearlyReductive k G)
+    (M : Rep k G) [FiniteDimensional k M]
+    (π₁ π₂ : M ⟶ M)
+    (h₁ : LinearMap.IsProj M.ρ.invariants π₁.hom.hom)
+    (h₂ : LinearMap.IsProj M.ρ.invariants π₂.hom.hom) :
+    π₁ = π₂ := by
+  -- Naturality for the identity intertwiner reads `π₁ v = π₂ v`, since its `hom.hom = id`.
+  have h := IsLinearlyReductive.reynolds_natural (k := k) (G := G) hlr M M
+    (CategoryTheory.CategoryStruct.id M) π₁ π₂ h₁ h₂
+  apply Action.hom_ext
+  apply ModuleCat.hom_ext
+  ext v
+  simpa using h v
+
+end FiniteDimensionalReynolds
+
+/-! ## D. Reynolds projection: locally finite case -/
+
+section LocallyFiniteReynolds
+
+/-- **Existence of the Reynolds projection, locally finite case.** A linearly reductive group `G`
+acting locally finitely on a `k`-module `R` admits a representation morphism onto `Rᴳ` (a linear
+projection onto the invariants) on `Rep.of (ofDistribMulAction k G R)`.
+
+For each `r`, local finiteness gives a finite-dimensional `G`-stable `V r ∋ r`, on which the
+finite-dimensional case supplies a local Reynolds projection. Naturality applied to the inclusions
+`V r ↪ V r ⊔ V s ↩ V s` shows these local projections agree on overlaps, so `f r := π_{V r} r` is
+well defined; the same compatibility makes `f` `k`-linear, a projection onto `Rᴳ`, and
+`G`-equivariant, so it assembles into a `Rep` morphism. -/
 theorem exists_reynolds_of_locallyFinite
     (hlr : IsLinearlyReductive k G)
     (R : Type u) [AddCommGroup R] [Module k R] [DistribMulAction G R] [SMulCommClass G k R]
@@ -318,11 +329,7 @@ theorem exists_reynolds_of_locallyFinite
     haveI : FiniteDimensional k ↥(V r) := hV_fin r
     obtain ⟨Pr, hπ⟩ := IsLinearlyReductive.exists_reynolds_projection (k := k) (G := G) hlr
       (Mamb.subrepresentation (V r) (hV_comap r))
-    refine ⟨Pr.hom.hom, hπ, fun g v => ?_⟩
-    change Pr.hom.hom ((Mamb.subrepresentation (V r) (hV_comap r)).ρ g v) = Pr.hom.hom v
-    rw [Rep.hom_comm_apply Pr g v]
-    exact (((Mamb.subrepresentation (V r) (hV_comap r)).ρ.mem_invariants _).mp
-      (hπ.map_mem v)) g
+    exact ⟨Pr.hom.hom, hπ, Rep.isProj_invariants_apply_rho hπ⟩
   -- Choose the projections
   choose π_loc hπ_proj hπ_eq using local_data
   -- Key: for any two G-stable f.d. submodules W₁, W₂ with r ∈ W₁ ∩ W₂,
@@ -367,29 +374,19 @@ theorem exists_reynolds_of_locallyFinite
       intro g v; ext; simp [ι₂, Representation.subrepresentation, Submodule.inclusion]
     -- Wrap π₁, π₂, ι₁, ι₂ as `Rep` morphisms so we can call `reynolds_natural`.
     let P₁ : Mamb.subrepresentation W₁ hW₁_st ⟶ Mamb.subrepresentation W₁ hW₁_st :=
-      { hom := ModuleCat.ofHom π₁
-        comm := fun g => ModuleCat.hom_ext <| LinearMap.ext fun v => by
-          change π₁ ((Mamb.subrepresentation W₁ hW₁_st).ρ g v) =
-              (Mamb.subrepresentation W₁ hW₁_st).ρ g (π₁ v)
-          rw [show (Mamb.subrepresentation W₁ hW₁_st).ρ g v
-                = (ρ.subrepresentation W₁ hW₁_st) g v from rfl, h₁_eq g v]
-          exact (((Mamb.subrepresentation W₁ hW₁_st).ρ.mem_invariants _).mp
-            (h₁.map_mem v) g).symm }
+      Rep.mkHom π₁ fun g v => by
+        rw [show (Mamb.subrepresentation W₁ hW₁_st).ρ g v
+              = (ρ.subrepresentation W₁ hW₁_st) g v from rfl, h₁_eq g v]
+        exact (((Mamb.subrepresentation W₁ hW₁_st).ρ.mem_invariants _).mp (h₁.map_mem v) g).symm
     let P₂ : Mamb.subrepresentation W₂ hW₂_st ⟶ Mamb.subrepresentation W₂ hW₂_st :=
-      { hom := ModuleCat.ofHom π₂
-        comm := fun g => ModuleCat.hom_ext <| LinearMap.ext fun v => by
-          change π₂ ((Mamb.subrepresentation W₂ hW₂_st).ρ g v) =
-              (Mamb.subrepresentation W₂ hW₂_st).ρ g (π₂ v)
-          rw [show (Mamb.subrepresentation W₂ hW₂_st).ρ g v
-                = (ρ.subrepresentation W₂ hW₂_st) g v from rfl, h₂_eq g v]
-          exact (((Mamb.subrepresentation W₂ hW₂_st).ρ.mem_invariants _).mp
-            (h₂.map_mem v) g).symm }
+      Rep.mkHom π₂ fun g v => by
+        rw [show (Mamb.subrepresentation W₂ hW₂_st).ρ g v
+              = (ρ.subrepresentation W₂ hW₂_st) g v from rfl, h₂_eq g v]
+        exact (((Mamb.subrepresentation W₂ hW₂_st).ρ.mem_invariants _).mp (h₂.map_mem v) g).symm
     let I₁ : Mamb.subrepresentation W₁ hW₁_st ⟶ Mamb.subrepresentation W hW_stable :=
-      { hom := ModuleCat.ofHom ι₁
-        comm := fun g => ModuleCat.hom_ext <| LinearMap.ext fun v => hι₁ g v }
+      Rep.mkHom ι₁ hι₁
     let I₂ : Mamb.subrepresentation W₂ hW₂_st ⟶ Mamb.subrepresentation W hW_stable :=
-      { hom := ModuleCat.ofHom ι₂
-        comm := fun g => ModuleCat.hom_ext <| LinearMap.ext fun v => hι₂ g v }
+      Rep.mkHom ι₂ hι₂
     -- Apply naturality
     have hnat₁ := IsLinearlyReductive.reynolds_natural (k := k) (G := G) hlr
       (Mamb.subrepresentation W₁ hW₁_st) (Mamb.subrepresentation W hW_stable)
@@ -436,11 +433,8 @@ theorem exists_reynolds_of_locallyFinite
       IsLinearlyReductive.exists_reynolds_projection (k := k) (G := G) hlr
         (Mamb.subrepresentation W hW_st)
     let πW : ↥W →ₗ[k] ↥W := PW.hom.hom
-    have hπW_eq : ∀ (g : G) (v : ↥W),
-        πW ((ρ.subrepresentation W hW_st) g v) = πW v := fun g v => by
-      change πW ((Mamb.subrepresentation W hW_st).ρ g v) = πW v
-      rw [Rep.hom_comm_apply PW g v]
-      exact (((Mamb.subrepresentation W hW_st).ρ.mem_invariants _).mp (hπW.map_mem v)) g
+    have hπW_eq : ∀ (g : G) (v : ↥W), πW ((ρ.subrepresentation W hW_st) g v) = πW v :=
+      Rep.isProj_invariants_apply_rho hπW
     have hr : r ∈ W := Submodule.mem_sup_left (hV_mem r)
     have hs : s ∈ W := Submodule.mem_sup_right (hV_mem s)
     have hrs : r + s ∈ W := W.add_mem hr hs
@@ -498,22 +492,17 @@ theorem exists_reynolds_of_locallyFinite
     rw [← heq]
     exact hπ_eq r g ⟨r, hV_mem r⟩
   -- Promote to a `Rep` morphism `Mamb ⟶ Mamb`.
-  refine ⟨{ hom := ModuleCat.ofHom π_lin
-            comm := fun g => ModuleCat.hom_ext <| LinearMap.ext fun r => by
-              change π_lin (Mamb.ρ g r) = Mamb.ρ g (π_lin r)
-              rw [show Mamb.ρ g r = ρ g r from rfl, hπ_equiv g r]
-              exact ((Mamb.ρ.mem_invariants _).mp (hπ_proj_global.map_mem r) g).symm }, ?_⟩
-  exact hπ_proj_global
+  exact ⟨Rep.mkHom π_lin fun g r => by
+    rw [show Mamb.ρ g r = ρ g r from rfl, hπ_equiv g r]
+    exact ((Mamb.ρ.mem_invariants _).mp (hπ_proj_global.map_mem r) g).symm, hπ_proj_global⟩
 
-/-- **Locally-finite Reynolds uniqueness.** Any two Rep-morphism projections onto the
-invariants of `Rep.of (ofDistribMulAction k G R)` agree, when `G` is linearly reductive
-and the `G`-action on `R` is locally finite.
+/-- **Uniqueness of the Reynolds projection, locally finite case.** Under the same hypotheses, any
+two representation-morphism projections `π₁, π₂` onto `Rᴳ` are equal.
 
-Proof strategy (TODO): for each `r`, pick `W` f.d. G-stable containing `r`, `π₁(r)`,
-`π₂(r)` (the latter two extend `r`'s f.d. neighborhood by 1-dim G-stable rays through
-invariants). Iterate `W ↦ W + π₁(W) + π₂(W)` finitely many times until stable, obtaining
-a f.d. G-stable subspace `W'` closed under both projections. Then `π₁|_{W'}, π₂|_{W'}`
-are Rep-projections onto `W'^G`, and `reynolds_unique` (f.d. version) forces equality. -/
+Fix `r` and a finite-dimensional `G`-stable `V ∋ r`. As each `πᵢ` lands in the invariants,
+`W := V + π₁ V + π₂ V` is finite-dimensional, `G`-stable, and closed under both `πᵢ`. Restricting
+`π₁, π₂` to `W` yields two Reynolds projections onto `Wᴳ`, equal by the finite-dimensional
+uniqueness `reynolds_unique`; evaluating at `r ∈ W` gives `π₁ r = π₂ r`. -/
 theorem IsLinearlyReductive.reynolds_unique_locallyFinite
     (hlr : IsLinearlyReductive k G)
     (R : Type u) [AddCommGroup R] [Module k R] [DistribMulAction G R] [SMulCommClass G k R]
@@ -583,30 +572,22 @@ theorem IsLinearlyReductive.reynolds_unique_locallyFinite
   haveI : FiniteDimensional k ↥(V ⊔ Submodule.map p₁ V : Submodule k R) :=
     Submodule.finiteDimensional_sup _ _
   haveI : FiniteDimensional k ↥W := Submodule.finiteDimensional_sup _ _
-  -- p₁ maps W into W.
-  have hp₁_W : ∀ w ∈ W, p₁ w ∈ W := by
-    intro w hw
+  -- A projection `p` onto the invariants maps `W` into `W`: it sends `V` into its own image
+  -- summand `Submodule.map p V`, and acts as the identity on the invariant summands.
+  have pW : ∀ (p : R →ₗ[k] R), LinearMap.IsProj σ.invariants p → Submodule.map p V ≤ W →
+      ∀ w ∈ W, p w ∈ W := by
+    intro p hp hpV w hw
     rcases Submodule.mem_sup.mp hw with ⟨a, ha, c, hc, rfl⟩
     rcases Submodule.mem_sup.mp ha with ⟨a₁, ha₁, a₂, ha₂, rfl⟩
     rw [map_add, map_add]
     refine Submodule.add_mem _ (Submodule.add_mem _ ?_ ?_) ?_
-    · exact Submodule.mem_sup_left (Submodule.mem_sup_right ⟨a₁, ha₁, rfl⟩)
-    · rw [h₁.map_id a₂ (hp₁V_inv ha₂)]
+    · exact hpV ⟨a₁, ha₁, rfl⟩
+    · rw [hp.map_id a₂ (hp₁V_inv ha₂)]
       exact Submodule.mem_sup_left (Submodule.mem_sup_right ha₂)
-    · rw [h₁.map_id c (hp₂V_inv hc)]
+    · rw [hp.map_id c (hp₂V_inv hc)]
       exact Submodule.mem_sup_right hc
-  -- p₂ maps W into W.
-  have hp₂_W : ∀ w ∈ W, p₂ w ∈ W := by
-    intro w hw
-    rcases Submodule.mem_sup.mp hw with ⟨a, ha, c, hc, rfl⟩
-    rcases Submodule.mem_sup.mp ha with ⟨a₁, ha₁, a₂, ha₂, rfl⟩
-    rw [map_add, map_add]
-    refine Submodule.add_mem _ (Submodule.add_mem _ ?_ ?_) ?_
-    · exact Submodule.mem_sup_right ⟨a₁, ha₁, rfl⟩
-    · rw [h₂.map_id a₂ (hp₁V_inv ha₂)]
-      exact Submodule.mem_sup_left (Submodule.mem_sup_right ha₂)
-    · rw [h₂.map_id c (hp₂V_inv hc)]
-      exact Submodule.mem_sup_right hc
+  have hp₁_W : ∀ w ∈ W, p₁ w ∈ W := pW p₁ h₁ (le_sup_of_le_left le_sup_right)
+  have hp₂_W : ∀ w ∈ W, p₂ w ∈ W := pW p₂ h₂ le_sup_right
   have hr_W : r ∈ W := Submodule.mem_sup_left (Submodule.mem_sup_left hV_mem)
   -- Restrict p₁, p₂ to W.
   let q₁ : ↥W →ₗ[k] ↥W := LinearMap.restrict p₁ hp₁_W
@@ -614,51 +595,36 @@ theorem IsLinearlyReductive.reynolds_unique_locallyFinite
   let MW : Rep k G := Mamb.subrepresentation W hW_stable
   haveI : FiniteDimensional k MW := inferInstanceAs (FiniteDimensional k ↥W)
   -- Wrap q₁, q₂ as `Rep`-morphisms on MW.
-  let Q₁ : MW ⟶ MW :=
-    { hom := ModuleCat.ofHom q₁
-      comm := fun g => ModuleCat.hom_ext <| LinearMap.ext fun w => by
-        apply Subtype.ext
-        change p₁ (σ g (w : R)) = σ g (p₁ (w : R))
-        exact hp₁_equiv g w }
-  let Q₂ : MW ⟶ MW :=
-    { hom := ModuleCat.ofHom q₂
-      comm := fun g => ModuleCat.hom_ext <| LinearMap.ext fun w => by
-        apply Subtype.ext
-        change p₂ (σ g (w : R)) = σ g (p₂ (w : R))
-        exact hp₂_equiv g w }
-  -- Both are projections onto MW.ρ.invariants.
-  have hQ₁_proj : LinearMap.IsProj MW.ρ.invariants q₁ := by
+  let Q₁ : MW ⟶ MW := Rep.mkHom q₁ fun g w => by
+    apply Subtype.ext
+    change p₁ (σ g (w : R)) = σ g (p₁ (w : R))
+    exact hp₁_equiv g w
+  let Q₂ : MW ⟶ MW := Rep.mkHom q₂ fun g w => by
+    apply Subtype.ext
+    change p₂ (σ g (w : R)) = σ g (p₂ (w : R))
+    exact hp₂_equiv g w
+  -- Restricting a projection onto `σ.invariants` to the stable subspace `W` is again a
+  -- projection onto the invariants of `MW`.
+  have qProj : ∀ (p : R →ₗ[k] R) (hpW : ∀ w ∈ W, p w ∈ W),
+      LinearMap.IsProj σ.invariants p →
+      LinearMap.IsProj MW.ρ.invariants (LinearMap.restrict p hpW) := by
+    intro p hpW hp
     refine ⟨fun w => ?_, fun w hw => ?_⟩
     · rw [Representation.mem_invariants]
       intro g
       apply Subtype.ext
-      change σ g (p₁ (w : R)) = p₁ (w : R)
-      exact ((σ.mem_invariants _).mp (h₁.map_mem (w : R))) g
+      change σ g (p (w : R)) = p (w : R)
+      exact ((σ.mem_invariants _).mp (hp.map_mem (w : R))) g
     · apply Subtype.ext
-      change p₁ (w : R) = (w : R)
-      apply h₁.map_id
+      change p (w : R) = (w : R)
+      apply hp.map_id
       rw [Representation.mem_invariants]
       intro g
-      have hgw : MW.ρ g w = w := ((MW.ρ.mem_invariants w).mp hw) g
-      have := congr_arg Subtype.val hgw
+      have := congr_arg Subtype.val (((MW.ρ.mem_invariants w).mp hw) g)
       change σ g (w : R) = (w : R) at this
       exact this
-  have hQ₂_proj : LinearMap.IsProj MW.ρ.invariants q₂ := by
-    refine ⟨fun w => ?_, fun w hw => ?_⟩
-    · rw [Representation.mem_invariants]
-      intro g
-      apply Subtype.ext
-      change σ g (p₂ (w : R)) = p₂ (w : R)
-      exact ((σ.mem_invariants _).mp (h₂.map_mem (w : R))) g
-    · apply Subtype.ext
-      change p₂ (w : R) = (w : R)
-      apply h₂.map_id
-      rw [Representation.mem_invariants]
-      intro g
-      have hgw : MW.ρ g w = w := ((MW.ρ.mem_invariants w).mp hw) g
-      have := congr_arg Subtype.val hgw
-      change σ g (w : R) = (w : R) at this
-      exact this
+  have hQ₁_proj : LinearMap.IsProj MW.ρ.invariants q₁ := qProj p₁ hp₁_W h₁
+  have hQ₂_proj : LinearMap.IsProj MW.ρ.invariants q₂ := qProj p₂ hp₂_W h₂
   -- Apply the f.d. uniqueness theorem on MW.
   have hQ_eq : Q₁ = Q₂ :=
     IsLinearlyReductive.reynolds_unique (k := k) (G := G) hlr MW Q₁ Q₂ hQ₁_proj hQ₂_proj
@@ -668,16 +634,21 @@ theorem IsLinearlyReductive.reynolds_unique_locallyFinite
     exact this
   exact congr_arg Subtype.val h_at_r
 
-/-- **Reynolds is `R^G`-linear on the right.**
+end LocallyFiniteReynolds
 
-For a linearly reductive group `G` acting on a `k`-algebra `R` by ring automorphisms
-(`MulSemiringAction G R`) with locally finite action, there exists a Reynolds projection
-`π` onto the invariants that is *also* `R^G`-linear: `π(a · r) = a · π(r)` whenever
-`a ∈ R^G`. This is the key Reynolds property used in Hilbert's finiteness for GIT.
+/-! ## E. Reynolds projection on algebras -/
 
-Proof: define the difference `δ : R →ₗ[k] R, δ r = π(a*r) - a*π(r)`. We show `δ + π`
-is another Rep-projection onto invariants, hence equals `π` by
-`reynolds_unique_locallyFinite`, so `δ = 0`. -/
+section AlgebraReynolds
+
+/-- **The Reynolds projection is `Rᴳ`-linear.** For a linearly reductive group `G` acting on a
+`k`-algebra `R` by ring automorphisms (`MulSemiringAction G R`) with locally finite action, there
+is a Reynolds projection `π` onto the invariants that additionally satisfies `π (a * r) = a * π r`
+for every invariant `a ∈ Rᴳ`. This is the Reynolds identity underlying Hilbert finiteness in GIT.
+
+Take `π` from `exists_reynolds_of_locallyFinite` and set `δ r := π (a * r) - a * π r`. Since `a`
+is invariant, `δ` is `G`-equivariant, lands in `Rᴳ`, and vanishes on `Rᴳ`; hence `δ + π`
+is again a representation-morphism projection onto `Rᴳ`. By `reynolds_unique_locallyFinite` this
+equals `π`, so `δ = 0`. -/
 theorem exists_reynolds_mul_compat_of_locallyFinite
     (hlr : IsLinearlyReductive k G)
     (R : Type u) [CommRing R] [Algebra k R]
@@ -701,9 +672,8 @@ theorem exists_reynolds_mul_compat_of_locallyFinite
   have h_a_equiv : ∀ (g : G) (s : R), g • (a * s) = a * (g • s) := fun g s => by
     rw [smul_mul', ha_g g]
   -- π is `G`-equivariant.
-  have hπ_equiv : ∀ (g : G) (s : R), π_lin (g • s) = g • (π_lin s) := fun g s => by
-    have := Rep.hom_comm_apply πR g s
-    exact this
+  have hπ_equiv : ∀ (g : G) (s : R), π_lin (g • s) = g • (π_lin s) := fun g s =>
+    Rep.hom_comm_apply πR g s
   -- Build leftMul_a : R →ₗ[k] R.
   let leftMul_a : R →ₗ[k] R :=
     { toFun := fun s => a * s
@@ -777,32 +747,21 @@ theorem exists_reynolds_mul_compat_of_locallyFinite
     change δ (g • s) + π_lin (g • s) = g • (δ s + π_lin s)
     rw [hδ_equiv, hπ_equiv, smul_add]
   -- Wrap π_lin' as a Rep morphism.
-  let π' : Rep.of σ ⟶ Rep.of σ :=
-    { hom := ModuleCat.ofHom π_lin'
-      comm := fun g => ModuleCat.hom_ext <| LinearMap.ext fun s => by
-        change π_lin' ((Rep.of σ).ρ g s) = (Rep.of σ).ρ g (π_lin' s)
-        exact hπ'_equiv g s }
+  let π' : Rep.of σ ⟶ Rep.of σ := Rep.mkHom π_lin' fun g s => hπ'_equiv g s
   have hπ'_proj : LinearMap.IsProj σ.invariants π_lin' :=
     ⟨hπ'_mem, hπ'_id⟩
   -- Uniqueness in the locally-finite setting.
   have h_eq : π' = πR :=
     IsLinearlyReductive.reynolds_unique_locallyFinite
       (k := k) (G := G) hlr R hlf π' πR hπ'_proj hπR
-  have h_lin_eq : π_lin' = π_lin := by
-    have h := congrArg (fun (μ : Rep.of σ ⟶ Rep.of σ) => μ.hom.hom) h_eq
-    exact h
-  -- δ = 0.
-  have hδ_zero : δ = 0 := by
-    have h_add : δ + π_lin = π_lin := h_lin_eq
-    have : δ = 0 := by
-      have := add_right_cancel (a := δ) (b := π_lin) (c := 0)
-      apply this
-      rw [zero_add]; exact h_add
-    exact this
-  -- Conclude: π(a*r) = a*π(r).
-  have hδ_r : δ r = 0 := by rw [hδ_zero]; rfl
-  have h_sub : φ₁ r - φ₂ r = 0 := hδ_r
+  have h_lin_eq : π_lin' = π_lin :=
+    congrArg (fun (μ : Rep.of σ ⟶ Rep.of σ) => μ.hom.hom) h_eq
+  -- `δ + π_lin = π_lin` forces `δ = 0`.
+  have hδ_zero : δ = 0 :=
+    add_right_cancel (b := π_lin) (by rw [zero_add]; exact h_lin_eq)
+  -- Conclude: `π (a * r) = a * π r`, i.e. `δ r = 0`.
   change π_lin (a * r) = a * π_lin r
-  exact sub_eq_zero.mp h_sub
+  have hδ_r : δ r = 0 := by rw [hδ_zero]; rfl
+  exact sub_eq_zero.mp hδ_r
 
-end GeneralReynolds
+end AlgebraReynolds
