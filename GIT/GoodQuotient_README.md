@@ -76,8 +76,6 @@ $$\mathfrak{q} \cap A^G = \mathfrak{p}.$$
 
 Thus $\mathfrak{q}$ is a prime of $A$ lying over $y$. Since $y$ was arbitrary, $\pi$ is surjective. $\blacksquare$
 
-*Remark.* This approach via (a) sidesteps the need to verify $\mathfrak{q} \cap A^G = \mathfrak{p}$ by hand: non-vanishing of $\kappa(y) \otimes_{A^G} A$ guarantees existence of a prime over $\mathfrak{p}$.
-
 ---
 
 ## V(I)_image_closed — Exercise 7.5.1 (c)
