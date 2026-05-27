@@ -61,10 +61,6 @@ so $\mathfrak{q} \cap A^G = \mathfrak{p}$, i.e. $\mathfrak{q}$ is a prime of $A$
 
 Therefore $\pi$ is surjective. $\blacksquare$
 
-*Remark.* This approach via (a) cleanly sidesteps the issue of verifying $\mathfrak{q} \cap A^G = \mathfrak{p}$
-by hand: non-vanishing of $\kappa(y) \otimes_{A^G} A$ gives existence of a prime over $\mathfrak{p}$
-without needing to track which prime of $A$ is chosen.
-
 ---
 
 ## V(I)_image_closed — Exercise 7.5.1 (c)
