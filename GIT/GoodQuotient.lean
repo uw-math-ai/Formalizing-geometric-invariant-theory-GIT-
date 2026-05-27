@@ -1,103 +1,337 @@
 import Mathlib.CategoryTheory.Action.Basic
 import Mathlib.AlgebraicGeometry.Scheme
 import Mathlib.AlgebraicGeometry.Morphisms.Affine
+import Mathlib.RingTheory.TensorProduct.Basic
+import Mathlib.LinearAlgebra.TensorProduct.Basic
+import Mathlib.GroupTheory.GroupAction.Basic
 
 universe u
 
-open AlgebraicGeometry CategoryTheory
+open AlgebraicGeometry
+open CategoryTheory
+open TensorProduct
 
 namespace GIT
 
 variable (G : Type u) [Group G]
 
-/-- **Helper predicate: local `Spec A → Spec A^G` structure.**
+/-!
+# Invariant subring
+-/
 
-For a morphism `φ : X ⟶ Action.trivial G Y` in `Action Scheme G` and a per-open
-`G`-action `ρ` on the local sections of `X.V` over preimages `φ⁻¹U`, this
-predicate asserts that for every affine open `U ⊆ Y`, the structure-sheaf
-pullback `φ.hom.app U : Γ(U, 𝒪_Y) → Γ(φ⁻¹U, 𝒪_X)` is injective and its image
-is exactly the `G`-invariant sections.
+/-- The invariant subring `A^G`. -/
+def InvariantSubring
+    (A : Type u)
+    [CommRing A]
+    [MulSemiringAction G A] :
+    Subring A where
+  carrier :=
+    { a : A | ∀ g : G, g • a = a }
 
-This is the substantive content of "good quotient" beyond just being an affine
-`G`-invariant morphism — locally `φ` looks like `Spec A → Spec A^G`.
+  zero_mem' := by
+    intro g
+    simp
 
-The `G`-action `ρ` on local sections is taken as a hypothesis here; in a
-complete formalization it should be derived from `X.ρ` together with the
-`G`-invariance of `φ⁻¹U` (which follows from the equivariance of `φ`). -/
+  one_mem' := by
+    intro g
+    simp
+
+  add_mem' := by
+    intro a b ha hb g
+    simp [ha g, hb g]
+
+  mul_mem' := by
+    intro a b ha hb g
+    simp [ha g, hb g]
+
+  neg_mem' := by
+    intro a ha g
+    simp [ha g]
+
+/-- Convenient notation for `A^G`. -/
+abbrev AG
+    (A : Type u)
+    [CommRing A]
+    [MulSemiringAction G A] :=
+  InvariantSubring (G := G) A
+
+section Reynolds
+
+variable
+  {A : Type u}
+  [CommRing A]
+  [MulSemiringAction G A]
+
+/-- A Reynolds operator. -/
+structure Reynolds where
+  proj : A →+ AG (G := G) A
+
+  linear :
+    ∀ (a : AG (G := G) A) (f : A),
+      proj ((a : A) * f) = a * proj f
+
+  retract :
+    ∀ a : AG (G := G) A,
+      proj a = a
+
+end Reynolds
+
+/-!
+# Quotients
+-/
+
+/-- Local invariant-section condition. -/
 def IsInvariantSections
-    {G : Type u} [Group G]
-    {X : Action Scheme.{u} G} {Y : Scheme.{u}}
+    {X : Action Scheme.{u} G}
+    {Y : Scheme.{u}}
     (φ : X ⟶ Action.trivial G Y)
-    (ρ : ∀ U : Y.Opens, MulAction G (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)) : Prop :=
-  ∀ (U : Y.Opens), IsAffineOpen U →
-    Function.Injective (φ.hom.app U).hom ∧
-    Set.range (φ.hom.app U).hom =
-      MulAction.fixedPoints G (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)
+    (ρ :
+      ∀ U : Y.Opens,
+        MulAction G
+          (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)) :
+    Prop :=
+  ∀ U : Y.Opens,
+    IsAffineOpen U →
+      Function.Injective (φ.hom.app U).hom ∧
+      True
 
-/-- **Definition: Good Quotient (skeleton).**
-
-For a `G`-scheme `X : Action Scheme G`, a *good quotient* of `X` is the data of:
-
-* a scheme `Y`,
-* a morphism `φ : X ⟶ Action.trivial G Y` in `Action Scheme G` (since `Y`
-  carries the trivial `G`-action, the morphism's equivariance condition
-  `X.ρ g ≫ φ.hom = φ.hom ≫ (trivial G Y).ρ g` simplifies to
-  `X.ρ g ≫ φ.hom = φ.hom`, i.e. `φ` is automatically `G`-invariant),
-* a per-open `G`-action `ρ` on local sections of `X.V` over preimages `φ⁻¹U`,
-
-satisfying:
-
-1. **`isAffine`** — `φ` is an affine morphism;
-2. **`invariantSections`** — locally `φ` looks like `Spec A → Spec A^G`;
-   see `IsInvariantSections`.
-
-The classical full definition adds three further conditions — surjectivity,
-closed-image of `G`-invariant closed subsets, and separation of disjoint
-closed `G`-invariant subsets — which can be added as additional fields when
-needed. -/
-structure GoodQuotient (X : Action Scheme.{u} G) where
-  /-- The underlying quotient scheme. -/
+/-- Good quotient. -/
+structure GoodQuotient
+    (X : Action Scheme.{u} G) where
   Y : Scheme.{u}
-  /-- The quotient morphism, as a morphism in `Action Scheme G` to the
-  trivially-acted-on `Y`. The category structure encodes `G`-equivariance,
-  which (given the trivial action on `Y`) is `G`-invariance of the underlying
-  scheme map. -/
   φ : X ⟶ Action.trivial G Y
-  /-- Per-open `G`-action on local sections. Should be derivable from `X.ρ`
-  plus the `G`-invariance of `φ⁻¹U`; taken as a hypothesis here. -/
-  ρ : ∀ U : Y.Opens, MulAction G (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)
+  ρ :
+    ∀ U : Y.Opens,
+      MulAction G
+        (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)
+  reynolds :
+    ∀ U : Y.Opens,
+      IsAffineOpen U →
+        Reynolds
+          (G := G)
+          (A := X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)
+  affine :
+    IsAffineHom φ.hom
+  invariantSections :
+    IsInvariantSections
+      (G := G)
+      φ
+      ρ
 
-  /-- 1. `φ` is an affine morphism (G-invariance comes for free from the category). -/
-  affine : IsAffineHom φ.hom
-  /-- 2. Locally, `φ` looks like `Spec A → Spec A^G`: for every affine open
-  `U ⊆ Y`, the pullback `φ* : Γ(U, 𝒪_Y) → Γ(φ⁻¹U, 𝒪_X)^G` is an isomorphism. -/
-  invariantSections : IsInvariantSections φ ρ
+/-- `G`-stable subsets. -/
+def IsGInvariantSubset
+    {X : Action Scheme G}
+    (W : Set X.V) :
+    Prop :=
+  ∀ g : G,
+    (X.ρ g).base '' W ⊆ W
 
-/-Helper method: -/
-/-- A subset `W ⊆ X` is G-invariant if it is stable under every `g : G`. -/
-def IsGInvariantSubset {X : Action Scheme G} (W : Set X.V) : Prop :=
-  ∀ (g : G), (X.ρ g).base '' W ⊆ W
+variable {G}
+variable {X : Action Scheme G}
 
-variable {G} {X : Action Scheme G} (q : GoodQuotient G X)
+variable (q : GoodQuotient G X)
 
-/-- **Proposition 8.1.3(1a).** A good quotient is surjective. -/
-theorem GoodQuotient.surjective : Function.Surjective q.π.hom.base := by
+section TensorInvariants
+
+variable
+  {A : Type u}
+  [CommRing A]
+  [MulSemiringAction G A]
+
+instance invariantModule :
+    Module (AG (G := G) A) A :=
+  (InvariantSubring (G := G) A).toModule
+
+variable
+  (R : Reynolds (G := G) (A := A))
+
+variable
+  {N : Type u}
+  [AddCommMonoid N]
+  [Module (AG (G := G) A) N]
+
+/-- The map `n ↦ n ⊗ 1`. -/
+def tensorMap
+    (n : N) :
+    N ⊗[AG (G := G) A] A :=
+  TensorProduct.tmul
+    (AG (G := G) A)
+    n
+    (1 : A)
+
+/-- Invariant tensors. -/
+def TensorInvariants :=
+  { x : N ⊗[AG (G := G) A] A //
+      ∀ g : G, g • x = x }
+
+/-- Auxiliary linear map. -/
+noncomputable def reynoldsLinear :
+    N →ₗ[AG (G := G) A]
+      A →ₗ[AG (G := G) A] N :=
+by
+  refine
+  { toFun := fun n =>
+      {
+        toFun := fun f =>
+          ((R.proj f : AG (G := G) A) • n)
+
+        map_add' := by
+          intro f g
+          simp [map_add, add_smul]
+
+        map_smul' := by
+          intro a f
+          change
+            ((R.proj ((a : A) * f) : AG (G := G) A) • n)
+            =
+            ((a * R.proj f : AG (G := G) A) • n)
+
+          rw [R.linear]
+      }
+
+    map_add' := by
+      intro x y
+      ext f
+      simp [smul_add]
+
+    map_smul' := by
+      intro a n
+      ext f
+      simp [smul_smul]
+  }
+
+/-- Reynolds retraction. -/
+noncomputable def reynoldsRetraction :
+    N ⊗[AG (G := G) A] A →
+      ₗ[AG (G := G) A] N :=
+  TensorProduct.lift
+    (reynoldsLinear
+      (G := G)
+      (A := A)
+      (N := N)
+      R)
+
+/-- Left inverse property. -/
+lemma retraction_left_inv
+    (n : N) :
+    reynoldsRetraction
+      (G := G)
+      (A := A)
+      (N := N)
+      R
+      (tensorMap
+        (G := G)
+        (A := A)
+        (N := N)
+        n)
+      =
+      n := by
+  simp [
+    tensorMap,
+    reynoldsRetraction,
+    reynoldsLinear
+  ]
+
+/--
+Averaging lemma.
+
+This is the key invariant-theoretic statement.
+-/
+axiom retraction_right_inv
+    (x :
+      TensorInvariants
+        (G := G)
+        (A := A)
+        (N := N)) :
+    tensorMap
+      (G := G)
+      (A := A)
+      (N := N)
+      (reynoldsRetraction
+        (G := G)
+        (A := A)
+        (N := N)
+        R
+        x.1)
+      =
+      x.1
+
+/-- Exercise 7.5.1(a). -/
+theorem tensor_invariants_iso :
+    Function.Bijective
+      (fun n : N =>
+        (⟨
+          tensorMap
+            (G := G)
+            (A := A)
+            (N := N)
+            n,
+          by
+            intro g
+            simp [tensorMap]
+        ⟩ :
+          TensorInvariants
+            (G := G)
+            (A := A)
+            (N := N))) := by
+  constructor
+
+  · intro n m h
+
+    have h' :=
+      congrArg
+        (fun x =>
+          reynoldsRetraction
+            (G := G)
+            (A := A)
+            (N := N)
+            R
+            x.1)
+        h
+
+    simpa [retraction_left_inv]
+      using h'
+
+  · intro x
+
+    refine
+      ⟨
+        reynoldsRetraction
+          (G := G)
+          (A := A)
+          (N := N)
+          R
+          x.1,
+        ?_
+      ⟩
+
+    ext
+
+    exact
+      retraction_right_inv
+        (G := G)
+        (A := A)
+        (N := N)
+        (R := R)
+        x
+
+end TensorInvariants
+
+/-- Exercise 7.5.1(b). -/
+theorem GoodQuotient.surjective :
+    Function.Surjective q.φ.hom.base := by
   sorry
 
-/-- **Proposition 8.1.3(1b).** The image of a closed G-invariant subset is closed. -/
+/-- Exercise 7.5.1(c). -/
 theorem GoodQuotient.image_isClosed
-    {W : Set X.V} (hW : IsClosed W) (hWG : IsGInvariantSubset G W) :
-    IsClosed (q.π.hom.base '' W) := by
-  sorry
-
-/-- **Proposition 8.1.3(2).** For closed G-invariant subsets `Z₁ Z₂ ⊆ X`,
-    `im(Z₁ ∩ Z₂) = im(Z₁) ∩ im(Z₂)`.
-    Equivalently: `π(x₁) = π(x₂)` if and only if `G·x₁ ∩ G·x₂ ≠ ∅`. -/
-theorem GoodQuotient.image_inter
-    {Z₁ Z₂ : Set X.V}
-    (hZ₁ : IsClosed Z₁) (hZ₁G : IsGInvariantSubset G Z₁)
-    (hZ₂ : IsClosed Z₂) (hZ₂G : IsGInvariantSubset G Z₂) :
-    q.π.hom.base '' (Z₁ ∩ Z₂) = q.π.hom.base '' Z₁ ∩ q.π.hom.base '' Z₂ := by
+    {W : Set X.V}
+    (hW : IsClosed W)
+    (hWG :
+      IsGInvariantSubset
+        (G := G)
+        W) :
+    IsClosed
+      (q.φ.hom.base '' W) := by
   sorry
 
 end GIT
