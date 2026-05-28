@@ -67,6 +67,7 @@ structure isGoodQuotient (X : Action Scheme.{u} G) where
   φ : X ⟶ Action.trivial G Y
   /-- Per-open `G`-action on local sections. Should be derivable from `X.ρ`
   plus the `G`-invariance of `φ⁻¹U`; taken as a hypothesis here. -/
+  /- problem: ρ should be induced not hypothesised. passed to it-/
   ρ : ∀ U : Y.Opens, MulAction G (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)
 
   /-- 1. `φ` is an affine morphism (G-invariance comes for free from the category). -/
