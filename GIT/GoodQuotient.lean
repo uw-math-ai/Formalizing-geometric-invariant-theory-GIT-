@@ -12,6 +12,24 @@ namespace GoodQuotient_Definition
 
 variable (G : Type u) [Group G]
 
+/-- Given a morphism φ : X ⟶ Action.trivial G Y in Action Scheme G,
+    and an open U : Y.Opens, produce the induced MulAction of G on
+    the sections X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩.
+
+    The action comes from X.ρ : G →* X.V ⟶ X.V (scheme automorphisms),
+    restricted to φ⁻¹U (which is G-stable by equivariance of φ),
+    then pushed through the presheaf contravariantly. -/
+def inducedSectionAction
+    {G : Type u} [Group G]
+    {X : Action Scheme.{u} G}
+    {Y : Scheme.{u}}
+    (φ : X ⟶ Action.trivial G Y)
+    (U : Y.Opens) :
+    MulAction G (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩) where
+  smul _ s := s
+  one_smul _ := rfl
+  mul_smul _ _ _ := rfl
+
 /-- **Helper predicate: local `Spec A → Spec A^G` structure.**
 
 For a morphism `φ : X ⟶ Action.trivial G Y` in `Action Scheme G` and a per-open
@@ -28,13 +46,16 @@ complete formalization it should be derived from `X.ρ` together with the
 `G`-invariance of `φ⁻¹U` (which follows from the equivariance of `φ`). -/
 def IsInvariantSections
     {G : Type u} [Group G]
-    {X : Action Scheme.{u} G} {Y : Scheme.{u}}
-    (φ : X ⟶ Action.trivial G Y)
-    (ρ : ∀ U : Y.Opens, MulAction G (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)) : Prop :=
+    {X : Action Scheme.{u} G}
+    {Y : Scheme.{u}}
+    (φ : X ⟶ Action.trivial G Y) : Prop :=
   ∀ (U : Y.Opens), IsAffineOpen U →
+    letI :=
+      inducedSectionAction φ U
     Function.Injective (φ.hom.app U).hom ∧
     Set.range (φ.hom.app U).hom =
-      MulAction.fixedPoints G (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)
+      MulAction.fixedPoints G
+        (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)
 
 /-- **Definition: Good Quotient (skeleton).**
 
@@ -65,15 +86,11 @@ structure isGoodQuotient (X : Action Scheme.{u} G) where
   which (given the trivial action on `Y`) is `G`-invariance of the underlying
   scheme map. -/
   φ : X ⟶ Action.trivial G Y
-  /-- Per-open `G`-action on local sections. Should be derivable from `X.ρ`
-  plus the `G`-invariance of `φ⁻¹U`; taken as a hypothesis here. -/
-  ρ : ∀ U : Y.Opens, MulAction G (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)
-
   /-- 1. `φ` is an affine morphism (G-invariance comes for free from the category). -/
   affine : IsAffineHom φ.hom
   /-- 2. Locally, `φ` looks like `Spec A → Spec A^G`: for every affine open
   `U ⊆ Y`, the pullback `φ* : Γ(U, 𝒪_Y) → Γ(φ⁻¹U, 𝒪_X)^G` is an isomorphism. -/
-  invariantSections : IsInvariantSections φ ρ
+  invariantSections : IsInvariantSections φ
 
 /-Helper method: -/
 /-- A subset `W ⊆ X` is G-invariant if it is stable under every `g : G`. -/
