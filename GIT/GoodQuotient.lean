@@ -1,5 +1,3 @@
-/- definition of good quotient -/
-
 import Mathlib.CategoryTheory.Action.Basic
 import Mathlib.AlgebraicGeometry.Scheme
 import Mathlib.AlgebraicGeometry.Morphisms.Affine
@@ -8,104 +6,146 @@ universe u
 
 open AlgebraicGeometry CategoryTheory
 
-namespace GoodQuotient_Definition
+namespace GoodQuotient
 
-variable (G : Type u) [Group G]
+variable {G : Type u} [Group G]
 
-/-- Given a morphism φ : X ⟶ Action.trivial G Y in Action Scheme G,
-    and an open U : Y.Opens, produce the induced MulAction of G on
-    the sections X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩.
+/-!
+## Section actions
+-/
 
-    The action comes from X.ρ : G →* X.V ⟶ X.V (scheme automorphisms),
-    restricted to φ⁻¹U (which is G-stable by equivariance of φ),
-    then pushed through the presheaf contravariantly. -/
+/-- The `G`-action on sections `Γ(φ⁻¹U, 𝒪_X)` induced by the `G`-action
+`X.ρ : G →* (X.V ⟶ X.V)` on the scheme `X.V`.
+
+**Construction sketch.**  For each `g : G` the automorphism `X.ρ g : X.V ⟶ X.V`
+restricts to `φ⁻¹U` (which is G-stable by equivariance of `φ`) and hence
+induces, via the presheaf pullback `X.V.presheaf.map`, a ring map
+`Γ(φ⁻¹U, 𝒪_X) → Γ(φ⁻¹U, 𝒪_X)`.
+
+TODO: replace the `sorry`-based body with the actual derivation once the
+G-stability of `φ⁻¹U` is established in Mathlib. -/
 def inducedSectionAction
-    {G : Type u} [Group G]
     {X : Action Scheme.{u} G}
     {Y : Scheme.{u}}
     (φ : X ⟶ Action.trivial G Y)
     (U : Y.Opens) :
     MulAction G (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩) where
-  smul _ s := s
+  smul g s :=
+    -- TODO: derive from `X.ρ g` via presheaf pullback restricted to φ⁻¹U.
+    -- For now this is a placeholder that compiles; it does NOT implement
+    -- the correct mathematical action.
+    s
   one_smul _ := rfl
   mul_smul _ _ _ := rfl
 
-/-- **Helper predicate: local `Spec A → Spec A^G` structure.**
+/-!
+## Core predicates
+-/
 
-For a morphism `φ : X ⟶ Action.trivial G Y` in `Action Scheme G` and a per-open
-`G`-action `ρ` on the local sections of `X.V` over preimages `φ⁻¹U`, this
-predicate asserts that for every affine open `U ⊆ Y`, the structure-sheaf
-pullback `φ.hom.app U : Γ(U, 𝒪_Y) → Γ(φ⁻¹U, 𝒪_X)` is injective and its image
-is exactly the `G`-invariant sections.
+/-- `IsInvariantSections φ` asserts that for every affine open `U ⊆ Y` the
+pullback map
+```
+  φ.hom.app U : Γ(U, 𝒪_Y) → Γ(φ⁻¹U, 𝒪_X)
+```
+is injective and its image equals the `G`-fixed points
+`Γ(φ⁻¹U, 𝒪_X)^G`.
 
-This is the substantive content of "good quotient" beyond just being an affine
-`G`-invariant morphism — locally `φ` looks like `Spec A → Spec A^G`.
+Together with affineness, this is the local condition that `φ` looks like
+`Spec A → Spec A^G` on every affine patch.
 
-The `G`-action `ρ` on local sections is taken as a hypothesis here; in a
-complete formalization it should be derived from `X.ρ` together with the
-`G`-invariance of `φ⁻¹U` (which follows from the equivariance of `φ`). -/
+The `G`-action on sections is supplied by `inducedSectionAction`; once that
+definition is corrected, this predicate will carry the correct mathematical
+meaning automatically. -/
 def IsInvariantSections
-    {G : Type u} [Group G]
     {X : Action Scheme.{u} G}
     {Y : Scheme.{u}}
     (φ : X ⟶ Action.trivial G Y) : Prop :=
   ∀ (U : Y.Opens), IsAffineOpen U →
-    letI :=
+    haveI : MulAction G (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩) :=
       inducedSectionAction φ U
     Function.Injective (φ.hom.app U).hom ∧
     Set.range (φ.hom.app U).hom =
-      MulAction.fixedPoints G
-        (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)
+      MulAction.fixedPoints G (X.V.presheaf.obj ⟨φ.hom ⁻¹ᵁ U⟩)
 
-/-- **Definition: Good Quotient (skeleton).**
+/-- `IsGInvariantSubset W` holds when the subset `W ⊆ |X|` (points of the
+underlying topological space) is stable under every `g : G`. -/
+def IsGInvariantSubset
+    {X : Action Scheme.{u} G}
+    (W : Set ↥X.V) : Prop :=
+  ∀ (g : G), (X.ρ g).base '' W ⊆ W
 
-For a `G`-scheme `X : Action Scheme G`, a *good quotient* of `X` is the data of:
+/-!
+## Main structure
+-/
 
-* a scheme `Y`,
-* a morphism `φ : X ⟶ Action.trivial G Y` in `Action Scheme G` (since `Y`
-  carries the trivial `G`-action, the morphism's equivariance condition
-  `X.ρ g ≫ φ.hom = φ.hom ≫ (trivial G Y).ρ g` simplifies to
-  `X.ρ g ≫ φ.hom = φ.hom`, i.e. `φ` is automatically `G`-invariant),
-* a per-open `G`-action `ρ` on local sections of `X.V` over preimages `φ⁻¹U`,
+/-- **Good quotient.**
+
+For a `G`-scheme `X : Action Scheme G`, a *good quotient* consists of:
+
+* a scheme `Y` (the orbit space),
+* a `G`-invariant morphism `φ : X → Y` (encoded as a morphism to the
+  trivially-acted-on `Y` in `Action Scheme G`),
 
 satisfying:
 
-1. **`isAffine`** — `φ` is an affine morphism;
-2. **`invariantSections`** — locally `φ` looks like `Spec A → Spec A^G`;
-   see `IsInvariantSections`.
+1. **Affine** — `φ` is an affine morphism.
+2. **Invariant sections** — for every affine open `U ⊆ Y` the pullback
+   `φ* : Γ(U, 𝒪_Y) → Γ(φ⁻¹U, 𝒪_X)` is an isomorphism onto the
+   `G`-fixed subsheaf; see `IsInvariantSections`.
 
-The classical full definition adds three further conditions — surjectivity,
-closed-image of `G`-invariant closed subsets, and separation of disjoint
-closed `G`-invariant subsets — which can be added as additional fields when
-needed. -/
-structure isGoodQuotient (X : Action Scheme.{u} G) where
-  /-- The underlying quotient scheme. -/
+The classical definition (MFK §0.2) additionally requires:
+3. Surjectivity of `φ`.
+4. The image of every closed `G`-invariant subset is closed.
+5. Disjoint closed `G`-invariant subsets have disjoint images.
+
+These are stated as separate propositions below (currently `sorry`'d) rather
+than fields, matching standard practice in Mathlib where hypotheses that are
+*consequences* of the structure are separated from the *defining data*. -/
+structure IsGoodQuotient (X : Action Scheme.{u} G) where
+  /-- The quotient scheme. -/
   Y : Scheme.{u}
-  /-- The quotient morphism, as a morphism in `Action Scheme G` to the
-  trivially-acted-on `Y`. The category structure encodes `G`-equivariance,
-  which (given the trivial action on `Y`) is `G`-invariance of the underlying
-  scheme map. -/
+  /-- The quotient morphism (G-invariance is automatic from the trivial action on Y). -/
   φ : X ⟶ Action.trivial G Y
-  /-- 1. `φ` is an affine morphism (G-invariance comes for free from the category). -/
+  /-- (1) φ is affine. -/
   affine : IsAffineHom φ.hom
-  /-- 2. Locally, `φ` looks like `Spec A → Spec A^G`: for every affine open
-  `U ⊆ Y`, the pullback `φ* : Γ(U, 𝒪_Y) → Γ(φ⁻¹U, 𝒪_X)^G` is an isomorphism. -/
+  /-- (2) φ looks like Spec A → Spec A^G on every affine patch. -/
   invariantSections : IsInvariantSections φ
 
-/-Helper method: -/
-/-- A subset `W ⊆ X` is G-invariant if it is stable under every `g : G`. -/
-def IsGInvariantSubset {X : Action Scheme G} (W : Set X.V) : Prop :=
-  ∀ (g : G), (X.ρ g).base '' W ⊆ W
+/-!
+## Properties (Proposition 8.1.3 / MFK §0.2)
+-/
 
---   /-- **Proposition 8.1.3(1a).** A good quotient is surjective. -/
--- theorem GoodQuotient.surjective : by sorry
+section Properties
 
--- /-- **Proposition 8.1.3(1b).** The image of a closed G-invariant subset is closed. -/
--- theorem GoodQuotient.image_isClosed : by sorry
+variable {X : Action Scheme.{u} G} (q : IsGoodQuotient X)
 
--- /-- **Proposition 8.1.3(2).** For closed G-invariant subsets `Z₁ Z₂ ⊆ X`,
---     `im(Z₁ ∩ Z₂) = im(Z₁) ∩ im(Z₂)`.
---     Equivalently: `π(x₁) = π(x₂)` if and only if `G·x₁ ∩ G·x₂ ≠ ∅`. -/
--- theorem GoodQuotient.image_inter : by sorry
+/-- **Prop. 8.1.3 (1a).** A good quotient is surjective. -/
+theorem IsGoodQuotient.surjective :
+    Function.Surjective q.φ.hom.base := by
+  sorry
 
-end GoodQuotient_Definition
+/-- **Prop. 8.1.3 (1b).** The image of a closed G-invariant subset is closed. -/
+theorem IsGoodQuotient.image_isClosed
+    {Z : Set ↥X.V}
+    (hZ_closed : IsClosed Z)
+    (hZ_inv : IsGInvariantSubset Z) :
+    IsClosed (q.φ.hom.base '' Z) := by
+  sorry
+
+/-- **Prop. 8.1.3 (2).** For closed G-invariant subsets `Z₁ Z₂ ⊆ X`,
+```
+  image(Z₁) ∩ image(Z₂) = image(Z₁ ∩ Z₂).
+```
+Equivalently, `φ(x₁) = φ(x₂)` iff the orbit closures `G·x₁` and `G·x₂`
+meet. -/
+theorem IsGoodQuotient.image_inter
+    {Z₁ Z₂ : Set ↥X.V}
+    (hZ₁_closed : IsClosed Z₁) (hZ₁_inv : IsGInvariantSubset Z₁)
+    (hZ₂_closed : IsClosed Z₂) (hZ₂_inv : IsGInvariantSubset Z₂) :
+    q.φ.hom.base '' (Z₁ ∩ Z₂) =
+      q.φ.hom.base '' Z₁ ∩ q.φ.hom.base '' Z₂ := by
+  sorry
+
+end Properties
+
+end GoodQuotient
