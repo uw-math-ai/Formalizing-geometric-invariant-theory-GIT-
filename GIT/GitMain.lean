@@ -909,7 +909,7 @@ theorem GIT_finiteType_invariants
   -- projection `π'` co-restricts to a `k`-linear map into `A`. The required identities
   -- come from `IsProj` plus the `R^G`-multiplicativity bundled by Reynolds.
   obtain ⟨π', hπ'_proj, hπ'_mul⟩
-    := exists_reynolds_mul_compat_of_locallyFinite (k := k) (G := G) hlr R hlf
+    := IsLinearlyReductive.exists_reynolds_mulCompat_of_isLocallyFinite hlr R hlf
   have hA_inv : ∀ {a : A}, (a : R) ∈ (Representation.ofDistribMulAction k G R).invariants :=
     fun {a} => (Representation.mem_invariants _ _).mpr a.property
   have hπ'_to_A : ∀ r : R, π'.hom.hom r ∈ A.toSubmodule := fun r g =>
