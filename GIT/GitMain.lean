@@ -27,7 +27,7 @@ variable [MulSemiringAction G R] [SMulCommClass G k R]
 variable {𝒜 : ℕ → Submodule k R} [GradedAlgebra 𝒜]
 variable {𝒜G : ℕ → Submodule k (FixedSubalgebra k G R)} [GradedAlgebra 𝒜G]
 
-/-- **Hilbert finiteness for GIT.** Let `G` be a linearly reductive group over a field `k`
+/-- **GIT.** Let `G` be a linearly reductive group over a field `k`
 acting on a finitely generated graded `k`-algebra `R` by grading-preserving `k`-algebra
 automorphisms with the action locally finite. Then the invariant subalgebra `R^G` is finitely
 generated as a `k`-algebra.
